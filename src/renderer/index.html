@@ -42,6 +42,14 @@
             </select>
           </label>
 
+          <label>
+            Folder output
+            <select id="output-mode">
+              <option value="preserve">Preserve folder tree</option>
+              <option value="flat">Flat output folder</option>
+            </select>
+          </label>
+
           <label class="path-field">
             Output directory
             <input id="output-dir" type="text" placeholder="D:/converted-images" />
@@ -58,6 +66,7 @@
         <article><span>Completed</span><strong id="stat-completed">0</strong></article>
         <article><span>Failed</span><strong id="stat-failed">0</strong></article>
         <article><span>Cancelled</span><strong id="stat-cancelled">0</strong></article>
+        <article><span>Skipped</span><strong id="stat-skipped">0</strong></article>
       </section>
 
       <section class="queue-section">

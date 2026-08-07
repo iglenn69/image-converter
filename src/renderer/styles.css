@@ -148,6 +148,7 @@ button.danger {
   color: var(--muted);
   font-size: 0.83rem;
   margin-top: 6px;
+  line-height: 1.45;
 }
 
 .progress {

@@ -63,15 +63,18 @@ function setupIpcHandlers() {
       sourcePath: String(item.sourcePath || ''),
       outputDir: String(item.outputDir || ''),
       targetFormat: String(item.targetFormat || 'png'),
-      bitDepth: String(item.bitDepth || '8')
+      bitDepth: String(item.bitDepth || '8'),
+      outputMode: String(item.outputMode || 'preserve')
     })).filter((item) => item.sourcePath.trim().length > 0);
 
     if (normalized.length === 0) {
       throw new Error('All jobs were empty.');
     }
 
+    const jobs = await queue.enqueueMany(normalized);
+
     return {
-      jobs: queue.enqueueMany(normalized),
+      jobs,
       stats: queue.getStats()
     };
   });

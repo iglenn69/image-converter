@@ -8,7 +8,8 @@ const state = {
     processing: 0,
     completed: 0,
     failed: 0,
-    cancelled: 0
+    cancelled: 0,
+    skipped: 0
   }
 };
 
@@ -16,6 +17,7 @@ const sourceInput = document.getElementById('source');
 const outputDirInput = document.getElementById('output-dir');
 const formatSelect = document.getElementById('format');
 const bitDepthSelect = document.getElementById('bit-depth');
+const outputModeSelect = document.getElementById('output-mode');
 const queueList = document.getElementById('queue-list');
 
 const statEls = {
@@ -25,6 +27,8 @@ const statEls = {
   completed: document.getElementById('stat-completed'),
   failed: document.getElementById('stat-failed'),
   cancelled: document.getElementById('stat-cancelled')
+  ,
+  skipped: document.getElementById('stat-skipped')
 };
 
 document.getElementById('pick-file').addEventListener('click', async () => {
@@ -58,8 +62,8 @@ document.getElementById('enqueue').addEventListener('click', async () => {
   }
 
   const items = state.selectedKind === 'folder'
-    ? [{ sourcePath: state.selectedPath, outputDir, targetFormat: formatSelect.value, bitDepth: bitDepthSelect.value }]
-    : [{ sourcePath: state.selectedPath, outputDir, targetFormat: formatSelect.value, bitDepth: bitDepthSelect.value }];
+    ? [{ sourcePath: state.selectedPath, outputDir, targetFormat: formatSelect.value, bitDepth: bitDepthSelect.value, outputMode: outputModeSelect.value }]
+    : [{ sourcePath: state.selectedPath, outputDir, targetFormat: formatSelect.value, bitDepth: bitDepthSelect.value, outputMode: 'flat' }];
 
   try {
     const snapshot = await window.converterApi.enqueue({ items });
@@ -96,7 +100,7 @@ function renderJobs() {
     head.className = 'queue-head';
 
     const title = document.createElement('div');
-    title.textContent = job.sourcePath;
+    title.textContent = job.sourceName || job.sourcePath;
 
     const status = document.createElement('span');
     status.className = 'status-chip';
@@ -135,8 +139,47 @@ function renderJobs() {
       li.appendChild(err);
     }
 
+    const details = document.createElement('div');
+    details.className = 'queue-meta';
+    const inputSize = formatBytes(job.inputBytes);
+    const outputSize = formatBytes(job.outputBytes);
+    const ratio = typeof job.compressionRatio === 'number' ? `${job.compressionRatio}x` : 'pending';
+    const duration = typeof job.durationMs === 'number' ? `${job.durationMs} ms` : 'pending';
+    const dimensions = job.width && job.height ? `${job.width}x${job.height}` : 'pending';
+    const layout = job.outputMode === 'flat' ? 'flat' : 'tree';
+    details.textContent = `${job.sourceFormat || 'unknown'} -> ${job.targetFormat} | ${dimensions} | ${layout} | input ${inputSize} | output ${outputSize} | ratio ${ratio} | duration ${duration}`;
+    li.appendChild(details);
+
+    if (job.outputPath) {
+      const outputPath = document.createElement('div');
+      outputPath.className = 'queue-meta';
+      outputPath.textContent = `Saved to: ${job.outputPath}`;
+      li.appendChild(outputPath);
+    }
+
     queueList.appendChild(li);
   }
+}
+
+function formatBytes(bytes) {
+  if (typeof bytes !== 'number' || Number.isNaN(bytes)) {
+    return 'pending';
+  }
+
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  const units = ['KB', 'MB', 'GB'];
+  let value = bytes / 1024;
+  let unitIndex = 0;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  return `${value.toFixed(value >= 10 ? 1 : 2)} ${units[unitIndex]}`;
 }
 
 window.converterApi.subscribe({

@@ -8,6 +8,10 @@
   },
   "author": "",
   "license": "MIT",
+  "dependencies": {
+    "heic-convert": "^2.1.0",
+    "sharp": "^0.34.3"
+  },
   "devDependencies": {
     "electron": "^34.3.0"
   }
