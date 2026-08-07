@@ -1,5 +1,9 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+/**
+ * Exposes the converter API to the renderer process.
+ * The API provides methods for file/folder picking, job queue management, and subscription to job updates.
+ */
 contextBridge.exposeInMainWorld('converterApi', {
   pickFile: () => ipcRenderer.invoke('dialog:pick-file'),
   pickFolder: () => ipcRenderer.invoke('dialog:pick-folder'),

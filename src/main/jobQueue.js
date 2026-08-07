@@ -4,6 +4,10 @@ const path = require('path');
 const { Worker } = require('worker_threads');
 const { detectImageType, getOutputFileName } = require('./imageDetection');
 
+/**
+ * Class representing a queue for managing image conversion jobs. It handles job submission, processing, and status tracking.
+ * The queue processes jobs sequentially, supports cancellation and stopping of jobs, and emits events for job updates and statistics.
+ */
 class ConversionJobQueue extends EventEmitter {
   constructor() {
     super();
@@ -26,6 +30,13 @@ class ConversionJobQueue extends EventEmitter {
     };
   }
 
+  /**
+   * Enqueues multiple items as conversion jobs. Each item can be a file or a directory, and the method will expand directories into individual jobs for each image file found.
+   * The method returns an array of the enqueued job objects, each containing details about the job's source, output, and status.   
+   * 
+   * @param {Array<Object>} items - The array of items to enqueue as jobs.
+   * @returns {Promise<Array<Object>>} - The array of enqueued job objects.
+   */
   async enqueueMany(items) {
     const jobs = [];
 

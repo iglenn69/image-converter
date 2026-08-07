@@ -120,6 +120,9 @@ stopAllButton.addEventListener('click', async () => {
   }
 });
 
+/**
+ * Renders the current statistics of the conversion job queue to the UI.
+ */
 function renderStats() {
   for (const [key, value] of Object.entries(state.stats)) {
     if (statEls[key]) {
@@ -130,6 +133,10 @@ function renderStats() {
   stopAllButton.disabled = state.stopInProgress || (state.stats.processing === 0 && state.stats.queued === 0);
 }
 
+/**
+ * Renders the list of conversion jobs in the queue to the UI.
+ * Each job displays its status, progress, and relevant metadata.
+ */
 function renderJobs() {
   const jobs = Array.from(state.jobs.values())
     .sort((a, b) => a.createdAt - b.createdAt);
@@ -219,6 +226,12 @@ function renderJobs() {
   }
 }
 
+/**
+ *  Formats a byte count into a human-readable string with appropriate units (B, KB, MB, GB).
+ * 
+ * @param {number} bytes - The number of bytes to format.
+ * @returns {string} - The formatted string representing the size in appropriate units. 
+ */
 function formatBytes(bytes) {
   if (typeof bytes !== 'number' || Number.isNaN(bytes)) {
     return 'pending';
@@ -240,6 +253,12 @@ function formatBytes(bytes) {
   return `${value.toFixed(value >= 10 ? 1 : 2)} ${units[unitIndex]}`;
 }
 
+/**
+ * Applies the smart output mode based on the selected kind (file or folder) and the saved output mode in local storage.
+ *
+ * @param {string} selectedKind - The kind of selection ('file' or 'folder').
+ * @returns {void}
+ */
 function applySmartOutputMode(selectedKind) {
   const savedOutputMode = localStorage.getItem(OUTPUT_MODE_STORAGE_KEY);
 
@@ -253,7 +272,12 @@ function applySmartOutputMode(selectedKind) {
   }
 }
 
-function getOutputModeForQueue() {
+/**
+ * Determines the output mode for the job queue based on the selected kind and user preference.
+ *
+ * @returns {string} - The output mode ('flat' or 'preserve') for the job queue.
+ */     
+ function getOutputModeForQueue() {
   if (state.selectedKind === 'folder') {
     return outputModeSelect.value;
   }
@@ -261,6 +285,10 @@ function getOutputModeForQueue() {
   return 'flat';
 }
 
+/**
+ * Subscribes to job updates and statistics from the conversion job queue.
+ * The renderer process will receive updates via the 'onJobUpdated' and 'onStatsUpdated' handlers.
+ */
 window.converterApi.subscribe({
   onJobUpdated: (job) => {
     state.jobs.set(job.id, job);
@@ -272,6 +300,10 @@ window.converterApi.subscribe({
   }
 });
 
+/**
+ * Bootstraps the renderer process by applying the smart output mode,
+ * retrieving the initial snapshot of the job queue, and rendering the UI.
+ */ 
 (async function bootstrap() {
   applySmartOutputMode('folder');
   const snapshot = await window.converterApi.getSnapshot();
