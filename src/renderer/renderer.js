@@ -1,6 +1,8 @@
 const state = {
   selectedPath: '',
   selectedKind: null,
+  outputModeTouched: false,
+  stopInProgress: false,
   jobs: new Map(),
   stats: {
     total: 0,
@@ -9,6 +11,7 @@ const state = {
     completed: 0,
     failed: 0,
     cancelled: 0,
+    stopped: 0,
     skipped: 0
   }
 };
@@ -19,6 +22,8 @@ const formatSelect = document.getElementById('format');
 const bitDepthSelect = document.getElementById('bit-depth');
 const outputModeSelect = document.getElementById('output-mode');
 const queueList = document.getElementById('queue-list');
+const stopAllButton = document.getElementById('stop-all');
+const OUTPUT_MODE_STORAGE_KEY = 'image-converter.outputMode';
 
 const statEls = {
   total: document.getElementById('stat-total'),
@@ -28,6 +33,7 @@ const statEls = {
   failed: document.getElementById('stat-failed'),
   cancelled: document.getElementById('stat-cancelled')
   ,
+  stopped: document.getElementById('stat-stopped'),
   skipped: document.getElementById('stat-skipped')
 };
 
@@ -37,6 +43,7 @@ document.getElementById('pick-file').addEventListener('click', async () => {
     state.selectedPath = picked;
     state.selectedKind = 'file';
     sourceInput.value = picked;
+    applySmartOutputMode('file');
   }
 });
 
@@ -46,7 +53,13 @@ document.getElementById('pick-folder').addEventListener('click', async () => {
     state.selectedPath = picked;
     state.selectedKind = 'folder';
     sourceInput.value = picked;
+    applySmartOutputMode('folder');
   }
+});
+
+outputModeSelect.addEventListener('change', () => {
+  state.outputModeTouched = true;
+  localStorage.setItem(OUTPUT_MODE_STORAGE_KEY, outputModeSelect.value);
 });
 
 document.getElementById('enqueue').addEventListener('click', async () => {
@@ -62,7 +75,7 @@ document.getElementById('enqueue').addEventListener('click', async () => {
   }
 
   const items = state.selectedKind === 'folder'
-    ? [{ sourcePath: state.selectedPath, outputDir, targetFormat: formatSelect.value, bitDepth: bitDepthSelect.value, outputMode: outputModeSelect.value }]
+    ? [{ sourcePath: state.selectedPath, outputDir, targetFormat: formatSelect.value, bitDepth: bitDepthSelect.value, outputMode: getOutputModeForQueue() }]
     : [{ sourcePath: state.selectedPath, outputDir, targetFormat: formatSelect.value, bitDepth: bitDepthSelect.value, outputMode: 'flat' }];
 
   try {
@@ -78,12 +91,43 @@ document.getElementById('enqueue').addEventListener('click', async () => {
   }
 });
 
+stopAllButton.addEventListener('click', async () => {
+  if (state.stats.processing === 0 && state.stats.queued === 0) {
+    return;
+  }
+
+  const confirmed = window.confirm(
+    'Stop the current conversion batch? Active work will be terminated, queued jobs will be stopped, and partial output will be cleaned up.'
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  state.stopInProgress = true;
+  const previousLabel = stopAllButton.textContent;
+  stopAllButton.textContent = 'Stopping...';
+  stopAllButton.disabled = true;
+
+  try {
+    await window.converterApi.stopAll();
+  } catch (error) {
+    window.alert(`Unable to stop conversions: ${error.message}`);
+  } finally {
+    state.stopInProgress = false;
+    stopAllButton.textContent = previousLabel;
+    renderStats();
+  }
+});
+
 function renderStats() {
   for (const [key, value] of Object.entries(state.stats)) {
     if (statEls[key]) {
       statEls[key].textContent = String(value);
     }
   }
+
+  stopAllButton.disabled = state.stopInProgress || (state.stats.processing === 0 && state.stats.queued === 0);
 }
 
 function renderJobs() {
@@ -105,6 +149,12 @@ function renderJobs() {
     const status = document.createElement('span');
     status.className = 'status-chip';
     status.textContent = `${job.status} (${job.stage})`;
+
+    if (job.status === 'stopped') {
+      status.style.background = 'rgba(67, 212, 154, 0.16)';
+      status.style.color = '#7cf0bb';
+      status.style.borderColor = 'rgba(67, 212, 154, 0.22)';
+    }
 
     head.append(title, status);
 
@@ -157,6 +207,14 @@ function renderJobs() {
       li.appendChild(outputPath);
     }
 
+    if (job.status === 'stopped') {
+      const stopped = document.createElement('div');
+      stopped.className = 'queue-meta';
+      stopped.style.color = '#7cf0bb';
+      stopped.textContent = 'Stopped gracefully and cleaned up partial output.';
+      li.appendChild(stopped);
+    }
+
     queueList.appendChild(li);
   }
 }
@@ -182,6 +240,27 @@ function formatBytes(bytes) {
   return `${value.toFixed(value >= 10 ? 1 : 2)} ${units[unitIndex]}`;
 }
 
+function applySmartOutputMode(selectedKind) {
+  const savedOutputMode = localStorage.getItem(OUTPUT_MODE_STORAGE_KEY);
+
+  if (savedOutputMode === 'flat' || savedOutputMode === 'preserve') {
+    outputModeSelect.value = savedOutputMode;
+    return;
+  }
+
+  if (!state.outputModeTouched) {
+    outputModeSelect.value = selectedKind === 'file' ? 'flat' : 'preserve';
+  }
+}
+
+function getOutputModeForQueue() {
+  if (state.selectedKind === 'folder') {
+    return outputModeSelect.value;
+  }
+
+  return 'flat';
+}
+
 window.converterApi.subscribe({
   onJobUpdated: (job) => {
     state.jobs.set(job.id, job);
@@ -194,6 +273,7 @@ window.converterApi.subscribe({
 });
 
 (async function bootstrap() {
+  applySmartOutputMode('folder');
   const snapshot = await window.converterApi.getSnapshot();
   state.stats = snapshot.stats;
   for (const job of snapshot.jobs) {

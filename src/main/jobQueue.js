@@ -11,6 +11,9 @@ class ConversionJobQueue extends EventEmitter {
     this.jobsById = new Map();
     this.running = false;
     this.activeJobId = null;
+    this.activeWorker = null;
+    this.activeWorkerTempOutputPath = null;
+    this.stopRequested = false;
     this.nextId = 1;
     this.stats = {
       queued: 0,
@@ -18,6 +21,7 @@ class ConversionJobQueue extends EventEmitter {
       completed: 0,
       failed: 0,
       cancelled: 0,
+      stopped: 0,
       skipped: 0
     };
   }
@@ -79,8 +83,67 @@ class ConversionJobQueue extends EventEmitter {
   getStats() {
     return {
       ...this.stats,
-      total: this.stats.queued + this.stats.processing + this.stats.completed + this.stats.failed + this.stats.cancelled,
+      total: this.stats.queued + this.stats.processing + this.stats.completed + this.stats.failed + this.stats.cancelled + this.stats.stopped,
       active: this.activeJobId
+    };
+  }
+
+  async stopAll() {
+    this.stopRequested = true;
+
+    const stoppedJobs = [];
+
+    for (const jobId of [...this.queue]) {
+      const job = this.jobsById.get(jobId);
+      if (!job || job.status !== 'queued') {
+        continue;
+      }
+
+      this.queue = this.queue.filter((id) => id !== jobId);
+      job.status = 'stopped';
+      job.stage = 'stopped';
+      job.progress = 100;
+      job.finishedAt = Date.now();
+      this.stats.queued -= 1;
+      this.stats.stopped += 1;
+      stoppedJobs.push(this._publicJob(job));
+    }
+
+    if (this.activeWorker) {
+      try {
+        await this.activeWorker.terminate();
+      } catch {
+        // Ignore worker termination failures during graceful stop.
+      }
+    }
+
+    await this._cleanupActiveWorkerOutput();
+
+    const activeJob = this.activeJobId ? this.jobsById.get(this.activeJobId) : null;
+    if (activeJob && activeJob.status === 'processing') {
+      activeJob.status = 'stopped';
+      activeJob.stage = 'stopped';
+      activeJob.progress = 100;
+      activeJob.finishedAt = Date.now();
+      this.stats.processing = Math.max(0, this.stats.processing - 1);
+      this.stats.stopped += 1;
+      stoppedJobs.push(this._publicJob(activeJob));
+    }
+
+    this.activeJobId = null;
+    this.activeWorker = null;
+    this.activeWorkerTempOutputPath = null;
+    this.running = false;
+
+    for (const job of stoppedJobs) {
+      this.emit('job-updated', job);
+    }
+
+    this.emit('stats-updated', this.getStats());
+
+    return {
+      ok: true,
+      stopped: stoppedJobs.length
     };
   }
 
@@ -116,6 +179,10 @@ class ConversionJobQueue extends EventEmitter {
 
   async _processingLoop() {
     while (this.queue.length > 0) {
+      if (this.stopRequested) {
+        break;
+      }
+
       const jobId = this.queue.shift();
       const job = this.jobsById.get(jobId);
 
@@ -153,20 +220,35 @@ class ConversionJobQueue extends EventEmitter {
         this.stats.processing -= 1;
         this.stats.completed += 1;
       } catch (error) {
-        job.status = 'failed';
-        job.stage = 'failed';
-        job.error = error instanceof Error ? error.message : String(error);
-        job.finishedAt = Date.now();
-        this.stats.processing -= 1;
-        this.stats.failed += 1;
+        if (this.stopRequested) {
+          if (job.status !== 'stopped') {
+            job.status = 'stopped';
+            job.stage = 'stopped';
+            job.progress = 100;
+            job.finishedAt = Date.now();
+            this.stats.stopped += 1;
+          }
+        } else {
+          job.status = 'failed';
+          job.stage = 'failed';
+          job.error = error instanceof Error ? error.message : String(error);
+          job.finishedAt = Date.now();
+          this.stats.failed += 1;
+        }
+        this.stats.processing = Math.max(0, this.stats.processing - 1);
       }
 
       this.emit('job-updated', this._publicJob(job));
       this.emit('stats-updated', this.getStats());
       this.activeJobId = null;
+
+      if (this.stopRequested) {
+        break;
+      }
     }
 
     this.running = false;
+    this.stopRequested = false;
   }
 
   async _expandItem(item) {
@@ -275,6 +357,9 @@ class ConversionJobQueue extends EventEmitter {
 
   async _runWorker(job) {
     return new Promise((resolve, reject) => {
+      let settled = false;
+      const finalOutputPath = path.join(path.resolve(job.outputDir), job.outputPath || job.outputFileName);
+      const tempOutputPath = `${finalOutputPath}.partial`;
       const worker = new Worker(path.join(__dirname, 'conversionWorker.js'), {
         workerData: {
           job: {
@@ -284,10 +369,31 @@ class ConversionJobQueue extends EventEmitter {
             bitDepth: job.bitDepth,
             detectedType: job.sourceFormat,
             outputFileName: job.outputFileName,
-            outputPath: job.outputPath
+            outputPath: job.outputPath,
+            finalOutputPath,
+            tempOutputPath
           }
         }
       });
+
+      this.activeWorker = worker;
+      this.activeWorkerTempOutputPath = tempOutputPath;
+
+      const settleResolve = (result) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        resolve(result);
+      };
+
+      const settleReject = (error) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        reject(error);
+      };
 
       worker.on('message', (message) => {
         if (message.type === 'progress') {
@@ -298,24 +404,42 @@ class ConversionJobQueue extends EventEmitter {
         }
 
         if (message.type === 'result') {
-          resolve(message.result);
+          settleResolve(message.result);
         }
 
         if (message.type === 'error') {
-          reject(new Error(message.error));
+          settleReject(new Error(message.error));
         }
       });
 
       worker.on('error', (error) => {
-        reject(error);
+        settleReject(error);
       });
 
       worker.on('exit', (code) => {
+        this.activeWorker = null;
+        if (code !== 0 && this.stopRequested) {
+          settleReject(new Error('Conversion stopped by user.'));
+          return;
+        }
+
         if (code !== 0) {
-          reject(new Error(`Worker exited with code ${code}`));
+          settleReject(new Error(`Worker exited with code ${code}`));
         }
       });
     });
+  }
+
+  async _cleanupActiveWorkerOutput() {
+    if (!this.activeWorkerTempOutputPath) {
+      return;
+    }
+
+    try {
+      await fs.rm(this.activeWorkerTempOutputPath, { force: true });
+    } catch {
+      // Ignore cleanup errors during graceful stop.
+    }
   }
 
   _publicJob(job) {

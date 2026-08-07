@@ -23,6 +23,7 @@ Implemented now:
 - Auto-detect source image type before conversion
 - See real-time per-job progress and aggregate stats
 - Cancel queued (not yet running) jobs
+- Stop the whole conversion batch gracefully at any time
 - Auto-create output directory during processing
 
 Not implemented yet:
@@ -127,6 +128,7 @@ Queue service characteristics:
   - `completed`
   - `failed`
   - `cancelled`
+   - `stopped`
 - Stage markers used for UI progress:
   - `queued`
   - `preparing`
@@ -137,6 +139,7 @@ Queue service characteristics:
   - `done`
   - `failed`
   - `cancelled`
+   - `stopped`
 
 Aggregate stats tracked:
 - `total`
@@ -145,6 +148,7 @@ Aggregate stats tracked:
 - `completed`
 - `failed`
 - `cancelled`
+- `stopped`
 
 ## Getting Started
 
@@ -171,9 +175,12 @@ npm start
 - Conversion work runs in `src/main/conversionWorker.js` on a worker thread.
 - Folder selections are expanded recursively in the main process.
 - Folder mode can preserve relative subdirectories or flatten everything into one output folder.
+- Output mode defaults to flat for single files and preserve for folders, while remembering the last manual choice.
 - Source type detection is based on file signatures and extension fallback.
 - Output directory creation is performed with `fs.mkdir(..., { recursive: true })`.
 - Each supported image file becomes its own queued job.
+- Stopping a batch terminates the active worker, marks remaining jobs as stopped, and removes partial output files.
+- Stopping a batch asks for confirmation before it terminates active work and cleans up partial output files.
 
 ## Next Milestones
 

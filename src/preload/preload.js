@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('converterApi', {
   enqueue: (payload) => ipcRenderer.invoke('queue:enqueue', payload),
   getSnapshot: () => ipcRenderer.invoke('queue:get-snapshot'),
   cancelJob: (jobId) => ipcRenderer.invoke('queue:cancel-job', jobId),
+  stopAll: () => ipcRenderer.invoke('queue:stop-all'),
   subscribe: (handlers) => {
     const onJobUpdated = (_event, job) => {
       if (handlers && typeof handlers.onJobUpdated === 'function') {

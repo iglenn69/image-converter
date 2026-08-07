@@ -90,6 +90,10 @@ function setupIpcHandlers() {
     return queue.cancelJob(String(jobId));
   });
 
+  ipcMain.handle('queue:stop-all', async () => {
+    return queue.stopAll();
+  });
+
   ipcMain.on('queue:subscribe', (event) => {
     const sendJob = (job) => {
       event.sender.send('queue:job-updated', job);

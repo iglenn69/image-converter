@@ -6,8 +6,8 @@ const heicConvert = require('heic-convert');
 
 async function convert(job) {
   const startedAt = Date.now();
-  const outputDir = path.resolve(job.outputDir);
-  const outputPath = path.join(outputDir, job.outputPath || job.outputFileName);
+  const finalOutputPath = path.resolve(job.finalOutputPath || path.join(path.resolve(job.outputDir), job.outputPath || job.outputFileName));
+  const outputPath = path.resolve(job.tempOutputPath || `${finalOutputPath}.partial`);
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
   const inputStats = await fs.stat(job.sourcePath);
@@ -38,11 +38,14 @@ async function convert(job) {
   const info = await pipeline.toFile(outputPath);
   sendProgress(90, 'writing');
 
-  const outputStats = await fs.stat(outputPath);
+  await fs.rm(finalOutputPath, { force: true });
+  await fs.rename(outputPath, finalOutputPath);
+
+  const outputStats = await fs.stat(finalOutputPath);
   const durationMs = Date.now() - startedAt;
 
   return {
-    outputPath,
+    outputPath: finalOutputPath,
     inputBytes: inputStats.size,
     outputBytes: outputStats.size,
     durationMs,

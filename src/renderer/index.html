@@ -10,8 +10,16 @@
   <body>
     <main class="app">
       <header class="app-header">
-        <h1>Image Converter</h1>
-        <p>Secure Electron shell with conversion job queue and real-time progress.</p>
+        <div class="header-copy">
+          <p class="eyebrow">Batch Conversion Dashboard</p>
+          <h1>Image Converter</h1>
+          <p>Secure Electron shell with conversion job queue and real-time progress.</p>
+        </div>
+
+        <div class="header-status">
+          <span class="header-badge header-badge-live">LIVE</span>
+          <span class="header-badge">Worker queue</span>
+        </div>
       </header>
 
       <section class="controls">
@@ -56,6 +64,7 @@
           </label>
 
           <button id="enqueue">Queue Conversion</button>
+          <button id="stop-all" class="secondary danger" disabled>Stop Conversion</button>
         </div>
       </section>
 
@@ -66,6 +75,7 @@
         <article><span>Completed</span><strong id="stat-completed">0</strong></article>
         <article><span>Failed</span><strong id="stat-failed">0</strong></article>
         <article><span>Cancelled</span><strong id="stat-cancelled">0</strong></article>
+        <article><span>Stopped</span><strong id="stat-stopped">0</strong></article>
         <article><span>Skipped</span><strong id="stat-skipped">0</strong></article>
       </section>
 
