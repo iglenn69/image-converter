@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Image Converter Shell</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="app-header">
+        <h1>Image Converter</h1>
+        <p>Secure Electron shell with conversion job queue and real-time progress.</p>
+      </header>
+
+      <section class="controls">
+        <div class="row">
+          <button id="pick-file">Select File</button>
+          <button id="pick-folder">Select Folder</button>
+          <input id="source" type="text" placeholder="No source selected" readonly />
+        </div>
+
+        <div class="row">
+          <label>
+            Output format
+            <select id="format">
+              <option value="png">png</option>
+              <option value="jpg">jpg</option>
+              <option value="webp">webp</option>
+              <option value="tiff">tiff</option>
+            </select>
+          </label>
+
+          <label>
+            Bit depth
+            <select id="bit-depth">
+              <option value="8">8-bit</option>
+              <option value="10">10-bit</option>
+              <option value="12">12-bit</option>
+              <option value="16">16-bit</option>
+            </select>
+          </label>
+
+          <label class="path-field">
+            Output directory
+            <input id="output-dir" type="text" placeholder="D:/converted-images" />
+          </label>
+
+          <button id="enqueue">Queue Conversion</button>
+        </div>
+      </section>
+
+      <section class="stats" id="stats">
+        <article><span>Total</span><strong id="stat-total">0</strong></article>
+        <article><span>Queued</span><strong id="stat-queued">0</strong></article>
+        <article><span>Processing</span><strong id="stat-processing">0</strong></article>
+        <article><span>Completed</span><strong id="stat-completed">0</strong></article>
+        <article><span>Failed</span><strong id="stat-failed">0</strong></article>
+        <article><span>Cancelled</span><strong id="stat-cancelled">0</strong></article>
+      </section>
+
+      <section class="queue-section">
+        <h2>Queue</h2>
+        <ul id="queue-list" class="queue-list"></ul>
+      </section>
+    </main>
+
+    <script src="./renderer.js"></script>
+  </body>
+</html>

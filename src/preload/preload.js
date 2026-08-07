@@ -1,0 +1,31 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('converterApi', {
+  pickFile: () => ipcRenderer.invoke('dialog:pick-file'),
+  pickFolder: () => ipcRenderer.invoke('dialog:pick-folder'),
+  enqueue: (payload) => ipcRenderer.invoke('queue:enqueue', payload),
+  getSnapshot: () => ipcRenderer.invoke('queue:get-snapshot'),
+  cancelJob: (jobId) => ipcRenderer.invoke('queue:cancel-job', jobId),
+  subscribe: (handlers) => {
+    const onJobUpdated = (_event, job) => {
+      if (handlers && typeof handlers.onJobUpdated === 'function') {
+        handlers.onJobUpdated(job);
+      }
+    };
+
+    const onStatsUpdated = (_event, stats) => {
+      if (handlers && typeof handlers.onStatsUpdated === 'function') {
+        handlers.onStatsUpdated(stats);
+      }
+    };
+
+    ipcRenderer.on('queue:job-updated', onJobUpdated);
+    ipcRenderer.on('queue:stats-updated', onStatsUpdated);
+    ipcRenderer.send('queue:subscribe');
+
+    return () => {
+      ipcRenderer.removeListener('queue:job-updated', onJobUpdated);
+      ipcRenderer.removeListener('queue:stats-updated', onStatsUpdated);
+    };
+  }
+});
